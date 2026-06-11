@@ -125,6 +125,7 @@ classifiers = [
     "Operating System :: Microsoft :: Windows",
     "Programming Language :: C++",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: Implementation :: CPython",
@@ -141,12 +142,15 @@ dependencies = [
     # macOS: Limited to older PyTorch versions (CPU only)
     # CPU package for Linux and macOS ARM64 (Apple Silicon only - Intel Macs not supported)
     # Linux uses latest PyTorch
+    "torch>={{ torch_min_py311 }},<{{ torch_max_py311 }}; platform_system == 'Linux' and python_version == '3.11'",
     "torch>={{ torch_min_py312 }},<{{ torch_max_py312 }}; platform_system == 'Linux' and python_version == '3.12'",
     "torch>={{ torch_min_py313 }},<{{ torch_max_py313 }}; platform_system == 'Linux' and python_version == '3.13'",
     # macOS ARM64 (Apple Silicon) - PyTorch 2.8+ available
+    "torch>={{ torch_min_py311_macos }},<{{ torch_max_py311_macos }}; platform_system == 'Darwin' and platform_machine == 'arm64' and python_version == '3.11'",
     "torch>={{ torch_min_py312_macos }},<{{ torch_max_py312_macos }}; platform_system == 'Darwin' and platform_machine == 'arm64' and python_version == '3.12'",
     "torch>={{ torch_min_py313_macos }},<{{ torch_max_py313_macos }}; platform_system == 'Darwin' and platform_machine == 'arm64' and python_version == '3.13'",
     # Windows
+    "torch>={{ torch_min_py311 }},<{{ torch_max_py311 }}; platform_system == 'Windows' and python_version == '3.11'",
     "torch>={{ torch_min_py312 }},<{{ torch_max_py312 }}; platform_system == 'Windows' and python_version == '3.12'",
     "torch>={{ torch_min_py313 }},<{{ torch_max_py313 }}; platform_system == 'Windows' and python_version == '3.13'",
 ]
@@ -221,7 +225,7 @@ local_scheme = "no-local-version"
 version_file = "pymomentum/_version.py"
 
 [tool.cibuildwheel]
-build = "cp312-* cp313-*"
+build = "cp311-* cp312-* cp313-*"
 build-verbosity = 3
 # Skip PyPy, musllinux, and Windows for now
 # Windows is skipped due to cibuildwheel shell issues with export/command substitution
@@ -268,7 +272,9 @@ else
   TORCH_INDEX="https://download.pytorch.org/whl/cpu"
 fi
 echo "Installing PyTorch for build (variant=$VARIANT, index=$TORCH_INDEX)..."
-if [ "$VER" = "312" ]; then
+if [ "$VER" = "311" ]; then
+  python -m pip install "torch>={{ torch_min_py311 }},<{{ torch_max_py311 }}" --index-url "$TORCH_INDEX"
+elif [ "$VER" = "312" ]; then
   python -m pip install "torch>={{ torch_min_py312 }},<{{ torch_max_py312 }}" --index-url "$TORCH_INDEX"
 elif [ "$VER" = "313" ]; then
   python -m pip install "torch>={{ torch_min_py313 }},<{{ torch_max_py313 }}" --index-url "$TORCH_INDEX"
@@ -293,7 +299,9 @@ else
   TORCH_INDEX="https://download.pytorch.org/whl/cpu"
 fi
 VER=$(python -c "import sys; print(f'{sys.version_info.major}{sys.version_info.minor}')")
-if [ "$VER" = "312" ]; then
+if [ "$VER" = "311" ]; then
+  python -m pip install "torch>={{ torch_min_py311 }},<{{ torch_max_py311 }}" --index-url "$TORCH_INDEX"
+elif [ "$VER" = "312" ]; then
   python -m pip install "torch>={{ torch_min_py312 }},<{{ torch_max_py312 }}" --index-url "$TORCH_INDEX"
 elif [ "$VER" = "313" ]; then
   python -m pip install "torch>={{ torch_min_py313 }},<{{ torch_max_py313 }}" --index-url "$TORCH_INDEX"

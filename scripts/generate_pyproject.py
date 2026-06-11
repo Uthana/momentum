@@ -25,6 +25,16 @@ def main():
     )
     # Linux/Windows PyTorch versions (support latest with CUDA 12.9)
     parser.add_argument(
+        "--torch-min-py311",
+        default="2.8.0",
+        help="Minimum PyTorch version for Python 3.11 (Linux/Windows): >=X.X.X",
+    )
+    parser.add_argument(
+        "--torch-max-py311",
+        default="2.9",
+        help="Maximum PyTorch version for Python 3.11 (Linux/Windows): <X.X (exclusive)",
+    )
+    parser.add_argument(
         "--torch-min-py312",
         default="2.8.0",
         help="Minimum PyTorch version for Python 3.12 (Linux/Windows): >=X.X.X",
@@ -45,6 +55,16 @@ def main():
         help="Maximum PyTorch version for Python 3.13 (Linux/Windows): <X.X (exclusive)",
     )
     # macOS PyTorch versions (now matches Linux/Windows as PyTorch 2.8+ is available on PyPI for macOS ARM)
+    parser.add_argument(
+        "--torch-min-py311-macos",
+        default="2.8.0",
+        help="Minimum PyTorch version for Python 3.11 (macOS): >=X.X.X",
+    )
+    parser.add_argument(
+        "--torch-max-py311-macos",
+        default="2.9",
+        help="Maximum PyTorch version for Python 3.11 (macOS): <X.X (exclusive)",
+    )
     parser.add_argument(
         "--torch-min-py312-macos",
         default="2.8.0",
@@ -81,6 +101,10 @@ def main():
 
     # Common template variables
     common_vars = dict(
+        torch_min_py311=args.torch_min_py311,
+        torch_max_py311=args.torch_max_py311,
+        torch_min_py311_macos=args.torch_min_py311_macos,
+        torch_max_py311_macos=args.torch_max_py311_macos,
         torch_min_py312=args.torch_min_py312,
         torch_max_py312=args.torch_max_py312,
         torch_min_py313=args.torch_min_py313,
@@ -92,7 +116,7 @@ def main():
     )
 
     # Generate CPU configs for each Python version
-    for py_ver in ["312", "313"]:
+    for py_ver in ["311", "312", "313"]:
         py_ver_min = f"3.{py_ver[1:]}"
         py_ver_max = f"3.{int(py_ver[1:]) + 1}"
         cpu_config = template.render(
@@ -108,7 +132,7 @@ def main():
         )
 
     # Generate GPU configs for each Python version
-    for py_ver in ["312", "313"]:
+    for py_ver in ["311", "312", "313"]:
         py_ver_min = f"3.{py_ver[1:]}"
         py_ver_max = f"3.{int(py_ver[1:]) + 1}"
         gpu_config = template.render(
