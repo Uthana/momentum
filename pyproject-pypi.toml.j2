@@ -18,10 +18,17 @@
     # The pixi environment's pybind11 uses pybind11NewTools which requires python3_add_library
     # from CMake's FindPython, but manylinux Python only has Interpreter component
     "-DMOMENTUM_USE_SYSTEM_PYBIND11=OFF",
-    # Use manylinux container's compiler (gcc-toolset-12) instead of pixi's GCC 14.3
-    # to ensure manylinux_2_28 compatibility (requires GLIBCXX <= 3.4.24, CXXABI <= 1.3.11)
-    "-DCMAKE_CXX_FLAGS=-static-libstdc++ -static-libgcc",
-    "-DCMAKE_C_FLAGS=-static-libgcc",
+    # Link libstdc++ dynamically and use the host's copy — the same one torch
+    # loads. A single process-wide libstdc++ avoids the symbol-interposition
+    # crashes (e.g. segfault in std::locale) we hit when a second, renamed
+    # copy was bundled in the wheel. Compiled with the manylinux container's
+    # gcc-toolset-12, so the extensions and the bundled conda deps require
+    # GLIBCXX <= 3.4.30 (GCC 12 era): satisfied by the system libstdc++ on
+    # Ubuntu 22.04+, Debian 12+, Fedora 36+.
+    # Hide symbols pulled in from static archives so they cannot be
+    # interposed by (or leak into) other extensions in the process.
+    "-DCMAKE_SHARED_LINKER_FLAGS=-Wl,--exclude-libs,ALL",
+    "-DCMAKE_MODULE_LINKER_FLAGS=-Wl,--exclude-libs,ALL",
 {%- endmacro %}
 
 {#- macOS-specific args -#}
@@ -329,8 +336,10 @@ repair-wheel-command = """
 # - manylinux_2_28 policy rejects our libs (too-recent GLIBCXX symbols)
 # - linux_x86_64 policy is not available inside the manylinux container
 #
-# We manually bundle dependencies and rename libstdc++ to avoid the dynamic
-# linker collision where Python/torch load the system libstdc++.so.6 first.
+# We manually bundle dependencies but deliberately do NOT bundle libstdc++:
+# everything uses the host's system libstdc++.so.6 (the same copy torch
+# loads), so there is exactly one C++ runtime in the process. Hosts need
+# GLIBCXX >= 3.4.30 (GCC 12 era, e.g. Ubuntu 22.04+).
 
 set -e
 
@@ -428,40 +437,11 @@ done
 echo "Bundled libraries:"
 ls -la "$LIBS_DIR/"
 
-# Special handling: rename libstdc++ to avoid dynamic linker collision
-echo '=== Renaming libstdc++ ==='
-RENAMED_LIBSTDCXX="libstdc++-pymomentum.so.6"
-
-# Find pixi's libstdc++ (the one with GLIBCXX_3.4.29)
-PIXI_LIBSTDCXX=$(find "$PIXI_ENV/lib" -name 'libstdc++.so.6.*' -not -type l | sort -V | tail -1)
-if [ -z "$PIXI_LIBSTDCXX" ]; then
-    PIXI_LIBSTDCXX="$PIXI_ENV/lib/libstdc++.so.6"
-fi
-PIXI_LIBSTDCXX=$(readlink -f "$PIXI_LIBSTDCXX")
-echo "Pixi libstdc++: $PIXI_LIBSTDCXX"
-
-# Copy with renamed name
-cp "$PIXI_LIBSTDCXX" "$LIBS_DIR/$RENAMED_LIBSTDCXX"
-chmod 755 "$LIBS_DIR/$RENAMED_LIBSTDCXX"
-# Remove the original-named copy if bundled above
-rm -f "$LIBS_DIR/libstdc++.so.6"
-
-# Set the SONAME of the renamed library
-patchelf --set-soname "$RENAMED_LIBSTDCXX" "$LIBS_DIR/$RENAMED_LIBSTDCXX"
-
-# Patch DT_NEEDED in all .so files
-echo '=== Patching DT_NEEDED and RPATH ==='
+# Set RPATH on all .so files so they find the bundled libs.
+# libstdc++ is intentionally NOT bundled (see header comment): it stays a
+# plain libstdc++.so.6 DT_NEEDED entry resolved from the host system.
+echo '=== Patching RPATH ==='
 find . -name '*.so*' -type f | while read so_file; do
-    case "$so_file" in
-        *libstdc++-pymomentum*) continue ;;
-    esac
-
-    # Replace libstdc++.so.6 reference with renamed version
-    if patchelf --print-needed "$so_file" 2>/dev/null | grep -q '^libstdc++[.]so[.]6$'; then
-        echo "  Patching DT_NEEDED: $so_file"
-        patchelf --replace-needed libstdc++.so.6 "$RENAMED_LIBSTDCXX" "$so_file"
-    fi
-
     # Set RPATH to find bundled libs (use DT_RPATH for higher priority)
     # Compute relative path from .so location to .libs dir
     SO_DIR=$(dirname "$so_file")
